@@ -1,0 +1,418 @@
+'use client'
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import {
+  fetchAll,
+  persistServices, removeService,
+  persistVerticals, removeVertical,
+  persistDoctors, removeDoctor,
+  persistReviews, removeReview,
+  persistVouchers, removeVoucher,
+  persistLocations, removeLocation,
+  persistPageSection, persistSiteSection,
+  persistRequestPatch, removeRequest,
+  refetchRequests, subscribeToRequests,
+  fetchUsers, updateUserRole,
+  isDemoMode, resetDemo as resetDemoData,
+} from '@/lib/admin/store'
+import { signIn, signOut, getCurrentUser, onAuthChange, can } from '@/lib/admin/auth'
+
+const AdminContext = createContext(null)
+
+export function useAdmin() {
+  const ctx = useContext(AdminContext)
+  if (!ctx) throw new Error('useAdmin must be used within <AdminProvider>')
+  return ctx
+}
+
+const EMPTY = {
+  services: [], verticals: [], doctors: [], reviews: [],
+  vouchers: [], requests: [], locations: [], pages: {}, site: {},
+}
+
+export function AdminProvider({ children }) {
+  const [ready, setReady] = useState(false)
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const [services, setServices] = useState([])
+  const [verticals, setVerticals] = useState([])
+  const [doctors, setDoctors] = useState([])
+  const [reviews, setReviews] = useState([])
+  const [vouchers, setVouchers] = useState([])
+  const [requests, setRequests] = useState([])
+  const [pages, setPages] = useState({})
+  const [site, setSite] = useState({})
+  const [locations, setLocations] = useState([])
+  const [users, setUsers] = useState([])
+
+  // Guards against a slow load from a previous session overwriting fresh state
+  // after a sign-out / sign-in.
+  const loadToken = useRef(0)
+
+  function applyAll(data) {
+    setServices(data.services)
+    setVerticals(data.verticals)
+    setDoctors(data.doctors)
+    setReviews(data.reviews)
+    setVouchers(data.vouchers)
+    setRequests(data.requests)
+    setLocations(data.locations)
+    setPages(data.pages)
+    setSite(data.site)
+  }
+
+  /** Pull everything from Supabase. Safe to call repeatedly. */
+  const refresh = useCallback(async () => {
+    const token = ++loadToken.current
+    setLoading(true)
+    try {
+      const data = await fetchAll()
+      if (token !== loadToken.current) return
+      applyAll(data)
+      setError('')
+    } catch (e) {
+      if (token !== loadToken.current) return
+      setError(e.message)
+    } finally {
+      if (token === loadToken.current) setLoading(false)
+    }
+  }, [])
+
+  /** Staff list, loaded alongside the content. */
+  const refreshUsers = useCallback(async () => {
+    try {
+      setUsers(await fetchUsers())
+    } catch {
+      // A non-admin can only read their own profile; an empty list is the
+      // correct outcome there, not an error worth interrupting them with.
+      setUsers([])
+    }
+  }, [])
+
+  // ── Session ───────────────────────────────────────────
+  // Resolve any stored session on mount, then follow auth changes (including
+  // sign-out in another tab).
+  useEffect(() => {
+    let alive = true
+
+    getCurrentUser()
+      .then(u => { if (alive) setUser(u) })
+      .catch(() => {})
+      .finally(() => { if (alive) setReady(true) })
+
+    const unsubscribe = onAuthChange(u => {
+      if (!alive) return
+      setUser(u)
+      if (!u) {
+        loadToken.current++
+        applyAll(EMPTY)
+      }
+    })
+
+    return () => { alive = false; unsubscribe() }
+  }, [])
+
+  // Load content once signed in; drop it on sign-out.
+  useEffect(() => {
+    if (!user) return
+    refresh()
+    refreshUsers()
+  }, [user, refresh, refreshUsers])
+
+  // Keep the enquiry inbox live — a booking submitted on the public site shows
+  // up without a refresh.
+  useEffect(() => {
+    if (!user) return
+    return subscribeToRequests(async () => {
+      try {
+        setRequests(await refetchRequests())
+      } catch {
+        /* a dropped realtime update is not worth surfacing */
+      }
+    })
+  }, [user])
+
+  // ── Auth ──────────────────────────────────────────────
+  const login = useCallback(async (email, password) => {
+    const res = await signIn(email, password)
+    if (res.ok) setUser(res.user)
+    return res
+  }, [])
+
+  const logout = useCallback(async () => {
+    await signOut()
+    setUser(null)
+    loadToken.current++
+    applyAll(EMPTY)
+  }, [])
+
+  const allowed = useCallback(action => can(user, action), [user])
+
+  /**
+   * Optimistically apply `next`, persist it, and roll back to `prev` if the
+   * write fails — so the screen never shows a change the database rejected.
+   */
+  const commit = useCallback(async (prev, next, setList, persist) => {
+    setList(next)
+    setSaving(true)
+    try {
+      await persist(next)
+      setError('')
+      return true
+    } catch (e) {
+      setList(prev)
+      setError(e.message)
+      return false
+    } finally {
+      setSaving(false)
+    }
+  }, [])
+
+  /**
+   * Shared upsert for every keyed collection.
+   *
+   * Editing a record's own key (a slug or id rename) can't be expressed as an
+   * upsert: the new key inserts a second row and the old one lingers. So the
+   * stale row is deleted FIRST — if that's refused (editors have no delete
+   * permission) the save aborts before a duplicate can be created.
+   */
+  const upsertInto = useCallback(async (
+    { list, setList, persist, remove, keyOf }, record, originalKey,
+  ) => {
+    const newKey = keyOf(record)
+    const exists = originalKey != null && list.some(r => keyOf(r) === originalKey)
+    const renamed = exists && originalKey !== newKey
+
+    if (renamed) {
+      setSaving(true)
+      try {
+        await remove(originalKey)
+      } catch (e) {
+        setError(`Could not rename to "${newKey}" — the previous record could not be removed. ${e.message}`)
+        setSaving(false)
+        return false
+      }
+      setSaving(false)
+    }
+
+    const next = exists
+      ? list.map(r => (keyOf(r) === originalKey ? record : r))
+      : [record, ...list]
+
+    return commit(list, next, setList, persist)
+  }, [commit])
+
+  /** Shared delete for every keyed collection. */
+  const deleteFrom = useCallback(async (
+    { list, setList, persist, remove, keyOf }, key,
+  ) => {
+    const prev = list
+    const next = list.filter(r => keyOf(r) !== key)
+    setList(next)
+    setSaving(true)
+    try {
+      await remove(key)
+      // Rewrite the remaining rows so `sort` stays gap-free after a removal.
+      await persist(next)
+      setError('')
+      return true
+    } catch (e) {
+      setList(prev)
+      setError(e.message)
+      return false
+    } finally {
+      setSaving(false)
+    }
+  }, [])
+
+  // One descriptor per collection, rebuilt only when its list changes. Keeping
+  // them in a single memo means every CRUD callback below has exactly one
+  // dependency, instead of silently capturing a stale list.
+  const cols = useMemo(() => {
+    const bySlug = r => r.slug
+    const byId = r => r.id
+    return {
+      services: { list: services, setList: setServices, persist: persistServices, remove: removeService, keyOf: bySlug },
+      verticals: { list: verticals, setList: setVerticals, persist: persistVerticals, remove: removeVertical, keyOf: byId },
+      doctors: { list: doctors, setList: setDoctors, persist: persistDoctors, remove: removeDoctor, keyOf: bySlug },
+      reviews: { list: reviews, setList: setReviews, persist: persistReviews, remove: removeReview, keyOf: byId },
+      vouchers: { list: vouchers, setList: setVouchers, persist: persistVouchers, remove: removeVoucher, keyOf: byId },
+      locations: { list: locations, setList: setLocations, persist: persistLocations, remove: removeLocation, keyOf: byId },
+    }
+  }, [services, verticals, doctors, reviews, vouchers, locations])
+
+  // ── Collection CRUD ───────────────────────────────────
+  // Verticals and locations append (they render as ordered settings lists);
+  // everything else prepends so a newly created record is visible immediately.
+  const appendTo = useCallback((col, record) => (
+    commit(col.list, [...col.list, record], col.setList, col.persist)
+  ), [commit])
+
+  /**
+   * Move a record one place up or down.
+   *
+   * Display order is stored as the `sort` column, which is written from array
+   * position on every list save — so reordering is just swapping two entries
+   * and persisting the list.
+   */
+  const move = useCallback((name, key, direction) => {
+    const col = cols[name]
+    const from = col.list.findIndex(r => col.keyOf(r) === key)
+    const to = from + direction
+    if (from === -1 || to < 0 || to >= col.list.length) return
+
+    const next = [...col.list]
+    ;[next[from], next[to]] = [next[to], next[from]]
+    return commit(col.list, next, col.setList, col.persist)
+  }, [cols, commit])
+
+  const moveUp = useCallback((name, key) => move(name, key, -1), [move])
+  const moveDown = useCallback((name, key) => move(name, key, 1), [move])
+
+  const upsertService = useCallback((r, k) => upsertInto(cols.services, r, k), [cols, upsertInto])
+  const deleteService = useCallback(k => deleteFrom(cols.services, k), [cols, deleteFrom])
+
+  const upsertVertical = useCallback((record, originalId) => {
+    const exists = originalId != null && cols.verticals.list.some(v => v.id === originalId)
+    return exists
+      ? upsertInto(cols.verticals, record, originalId)
+      : appendTo(cols.verticals, record)
+  }, [cols, upsertInto, appendTo])
+  const deleteVertical = useCallback(k => deleteFrom(cols.verticals, k), [cols, deleteFrom])
+
+  const upsertDoctor = useCallback((r, k) => upsertInto(cols.doctors, r, k), [cols, upsertInto])
+  const deleteDoctor = useCallback(k => deleteFrom(cols.doctors, k), [cols, deleteFrom])
+
+  const upsertReview = useCallback((r, k) => upsertInto(cols.reviews, r, k), [cols, upsertInto])
+  const deleteReview = useCallback(k => deleteFrom(cols.reviews, k), [cols, deleteFrom])
+
+  const upsertVoucher = useCallback((r, k) => upsertInto(cols.vouchers, r, k), [cols, upsertInto])
+  const deleteVoucher = useCallback(k => deleteFrom(cols.vouchers, k), [cols, deleteFrom])
+
+  const upsertLocation = useCallback((record, originalId) => {
+    const exists = originalId != null && cols.locations.list.some(l => l.id === originalId)
+    return exists
+      ? upsertInto(cols.locations, record, originalId)
+      : appendTo(cols.locations, record)
+  }, [cols, upsertInto, appendTo])
+  const deleteLocation = useCallback(k => deleteFrom(cols.locations, k), [cols, deleteFrom])
+
+  // ── Requests (consumer submissions) ───────────────────
+  // Staff don't create these — they arrive from the public site. Staff update
+  // the status and jot internal notes as they work each enquiry.
+  const updateRequest = useCallback(async (id, patch) => {
+    const prev = requests
+    const next = requests.map(r => (r.id === id ? { ...r, ...patch } : r))
+    setRequests(next)
+    setSaving(true)
+    try {
+      await persistRequestPatch(id, patch)
+      setError('')
+    } catch (e) {
+      setRequests(prev)
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }, [requests])
+
+  const setRequestStatus = useCallback((id, status) => {
+    updateRequest(id, { status })
+  }, [updateRequest])
+
+  const deleteRequest = useCallback(async id => {
+    const prev = requests
+    setRequests(requests.filter(r => r.id !== id))
+    setSaving(true)
+    try {
+      await removeRequest(id)
+      setError('')
+    } catch (e) {
+      setRequests(prev)
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }, [requests])
+
+  // ── Website content ───────────────────────────────────
+  // Page copy is a fixed tree (page → section → field) rather than a list, so
+  // it's patched section by section instead of upserted by id. Each save writes
+  // exactly one row, so two editors on different sections never collide.
+  const updatePageSection = useCallback(async (pageId, sectionId, patch) => {
+    const prev = pages
+    const merged = { ...prev[pageId]?.[sectionId], ...patch }
+    setPages({ ...prev, [pageId]: { ...prev[pageId], [sectionId]: merged } })
+    setSaving(true)
+    try {
+      await persistPageSection(pageId, sectionId, merged)
+      setError('')
+    } catch (e) {
+      setPages(prev)
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }, [pages])
+
+  const updateSiteSection = useCallback(async (groupId, sectionId, patch) => {
+    const prev = site
+    const merged = { ...prev[groupId]?.[sectionId], ...patch }
+    setSite({ ...prev, [groupId]: { ...prev[groupId], [sectionId]: merged } })
+    setSaving(true)
+    try {
+      await persistSiteSection(groupId, sectionId, merged)
+      setError('')
+    } catch (e) {
+      setSite(prev)
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }, [site])
+
+  // ── Users + roles ─────────────────────────────────────
+  const setUserRole = useCallback(async (id, role) => {
+    const prev = users
+    setUsers(users.map(u => (u.id === id ? { ...u, role } : u)))
+    setSaving(true)
+    try {
+      await updateUserRole(id, role)
+      setError('')
+    } catch (e) {
+      setUsers(prev)
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }, [users])
+
+  /** Preview only — restore every collection to its seed. */
+  const resetDemo = useCallback(async () => {
+    resetDemoData()
+    await refresh()
+    await refreshUsers()
+  }, [refresh, refreshUsers])
+
+  const value = {
+    ready, demoMode: isDemoMode,
+    loading, saving, error, dismissError: () => setError(''),
+    refresh, resetDemo,
+    user, login, logout, allowed,
+    services, upsertService, deleteService,
+    verticals, upsertVertical, deleteVertical,
+    doctors, upsertDoctor, deleteDoctor,
+    reviews, upsertReview, deleteReview,
+    vouchers, upsertVoucher, deleteVoucher,
+    requests, updateRequest, setRequestStatus, deleteRequest,
+    pages, updatePageSection,
+    site, updateSiteSection,
+    locations, upsertLocation, deleteLocation,
+    users, setUserRole,
+    moveUp, moveDown,
+  }
+
+  return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>
+}

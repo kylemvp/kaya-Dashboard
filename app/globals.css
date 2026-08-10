@@ -1,0 +1,45 @@
+/* ─────────────────────────────────────────────────────────────
+   Base styles for the dashboard.
+
+   The public site's 4,600-line stylesheet is gone with the site
+   itself — all that is needed here is the Kaya token set (so the
+   dashboard stays visually part of the same product) plus a reset.
+   Everything else lives in app/admin.css.
+   ───────────────────────────────────────────────────────────── */
+@import '../styles/tokens.css';
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+[hidden] { display: none !important; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  min-height: 100vh;
+  background: #F6F4FB;
+  color: var(--ink);
+  font-family: var(--ff-b);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Form controls don't inherit type by default, and the dashboard is mostly
+   forms — without this every input falls back to the browser default face. */
+button, input, select, textarea { font: inherit; color: inherit; }
+
+img, svg { display: block; max-width: 100%; }
+
+a { color: var(--primary); }
+
+/* Keyboard focus must stay visible — the dashboard is heavily tabbed through. */
+:focus-visible { outline: 2px solid var(--mid); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

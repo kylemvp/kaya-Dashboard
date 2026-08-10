@@ -1,0 +1,117 @@
+'use client'
+import { useState } from 'react'
+import { useAdmin } from './AdminContext'
+import ImagePicker from './ImagePicker'
+
+function slugify(str) {
+  return String(str)
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function cloneSafe(obj) {
+  if (typeof structuredClone === 'function') return structuredClone(obj)
+  return JSON.parse(JSON.stringify(obj))
+}
+
+export default function ReviewForm({ initial, isNew, onClose }) {
+  const { verticals, services, reviews, upsertReview } = useAdmin()
+  const [form, setForm] = useState(() => cloneSafe(initial))
+  const [error, setError] = useState('')
+  const originalId = isNew ? null : initial.id
+
+  function set(field, value) { setForm(f => ({ ...f, [field]: value })) }
+
+  function submit(e) {
+    e.preventDefault()
+    const name = form.name.trim()
+    if (!name) return setError('Name is required.')
+    if (!form.quote.trim()) return setError('Quote is required.')
+
+    const id = form.id.trim() || slugify(`${name}-${form.treatment}`) || slugify(name)
+    const clash = reviews.some(r => r.id === id && r.id !== originalId)
+    if (clash) return setError(`The id "${id}" is already in use.`)
+
+    upsertReview({ ...form, id, name }, originalId)
+    onClose()
+  }
+
+  return (
+    <form className="ad-editor" onSubmit={submit}>
+      <div className="ad-editor-head">
+        <button type="button" className="ad-back" onClick={onClose}>← Back</button>
+        <div className="ad-editor-titles">
+          <h1 className="ad-view-title">{isNew ? 'New review' : 'Edit review'}</h1>
+          <p className="ad-view-sub">{isNew ? 'Add a patient testimonial.' : form.id}</p>
+        </div>
+        <div className="ad-editor-actions">
+          <button type="button" className="ad-btn ad-btn--ghost" onClick={onClose}>Cancel</button>
+          <button type="submit" className="ad-btn ad-btn--primary">
+            {isNew ? 'Create review' : 'Save changes'}
+          </button>
+        </div>
+      </div>
+
+      {error && <div className="ad-form-error ad-editor-error">{error}</div>}
+
+      <div className="ad-editor-body">
+        <fieldset className="ad-fieldset">
+          <legend>Patient</legend>
+          <div className="ad-grid2">
+            <label className="ad-field">
+              <span className="ad-field-label">Name *</span>
+              <input className="ad-input" value={form.name}
+                onChange={e => set('name', e.target.value)} placeholder="e.g. Sarah A." />
+            </label>
+            <label className="ad-field">
+              <span className="ad-field-label">Location</span>
+              <input className="ad-input" value={form.location}
+                onChange={e => set('location', e.target.value)} placeholder="e.g. Dubai" />
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset className="ad-fieldset">
+          <legend>Treatment</legend>
+          <div className="ad-grid2">
+            <label className="ad-field">
+              <span className="ad-field-label">Treatment</span>
+              <input className="ad-input" value={form.treatment} list="ad-service-names"
+                onChange={e => set('treatment', e.target.value)}
+                placeholder="e.g. Botox & Fillers" />
+              <datalist id="ad-service-names">
+                {services.map(s => <option key={s.slug} value={s.name} />)}
+              </datalist>
+            </label>
+            <label className="ad-field">
+              <span className="ad-field-label">Vertical</span>
+              <select className="ad-input" value={form.vertical}
+                onChange={e => set('vertical', e.target.value)}>
+                <option value="">— none —</option>
+                {verticals.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+              </select>
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset className="ad-fieldset">
+          <legend>Quote *</legend>
+          <textarea className="ad-input ad-textarea" rows={4} value={form.quote}
+            onChange={e => set('quote', e.target.value)} placeholder="What the patient said…" />
+        </fieldset>
+
+        <fieldset className="ad-fieldset">
+          <legend>Before</legend>
+          <ImagePicker value={form.before} onChange={v => set('before', v)} />
+        </fieldset>
+
+        <fieldset className="ad-fieldset">
+          <legend>After</legend>
+          <ImagePicker value={form.after} onChange={v => set('after', v)} />
+        </fieldset>
+      </div>
+    </form>
+  )
+}

@@ -1,0 +1,15 @@
+node_modules/
+.next/
+out/
+
+# Secrets — never commit
+.env
+.env.local
+.env*.local
+
+# Generated design review — a 3.7 MB single file with every screenshot
+# inlined as base64. Regenerate it rather than versioning it.
+design-review/
+
+.DS_Store
+*.log

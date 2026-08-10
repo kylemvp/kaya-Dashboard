@@ -1,0 +1,245 @@
+'use client'
+import { useState } from 'react'
+import { useAdmin } from './AdminContext'
+import { CLINIC_COUNTRIES, emptyLocation } from '@/lib/admin/content'
+
+function slugify(str) {
+  return String(str).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+}
+
+export default function LocationsView() {
+  const { locations, upsertLocation, deleteLocation, allowed } = useAdmin()
+  const [editing, setEditing] = useState(null) // { initial, isNew }
+  const [confirm, setConfirm] = useState(null)
+  const [country, setCountry] = useState('all')
+  const [query, setQuery] = useState('')
+
+  const canCreate = allowed('create')
+  const canDelete = allowed('delete')
+
+  if (editing) {
+    return (
+      <LocationForm
+        initial={editing.initial}
+        isNew={editing.isNew}
+        existing={locations}
+        onSave={(rec, orig) => { upsertLocation(rec, orig); setEditing(null) }}
+        onClose={() => setEditing(null)}
+      />
+    )
+  }
+
+  const q = query.trim().toLowerCase()
+  const filtered = locations.filter(l => {
+    if (country !== 'all' && l.country !== country) return false
+    if (!q) return true
+    return `${l.name} ${l.city} ${l.addr}`.toLowerCase().includes(q)
+  })
+
+  const target = confirm ? locations.find(l => l.id === confirm) : null
+
+  return (
+    <div className="ad-view">
+      <div className="ad-view-head">
+        <div>
+          <h1 className="ad-view-title">Locations</h1>
+          <p className="ad-view-sub">
+            Clinic records behind the Find a Clinic page — addresses, phone numbers, and opening hours.
+          </p>
+        </div>
+        {canCreate && (
+          <button className="ad-btn ad-btn--primary"
+            onClick={() => setEditing({ initial: emptyLocation(), isNew: true })}>
+            + New clinic
+          </button>
+        )}
+      </div>
+
+      <div className="ad-toolbar">
+        <input
+          className="ad-input ad-search"
+          placeholder="Search clinics…"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+        />
+        <select className="ad-input ad-filter" value={country} onChange={e => setCountry(e.target.value)}>
+          <option value="all">All countries ({locations.length})</option>
+          {CLINIC_COUNTRIES.map(c => (
+            <option key={c} value={c}>
+              {c} ({locations.filter(l => l.country === c).length})
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="ad-table-wrap">
+        <table className="ad-table">
+          <thead>
+            <tr>
+              <th>Clinic</th>
+              <th>Country</th>
+              <th>City</th>
+              <th>Telephone</th>
+              <th>Timings</th>
+              <th className="ad-th-actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(l => (
+              <tr key={l.id}>
+                <td>
+                  <div className="ad-cell-name">{l.name}</div>
+                  <div className="ad-cell-slug">{l.addr}</div>
+                </td>
+                <td><span className="ad-badge">{l.country}</span></td>
+                <td>{l.city}</td>
+                <td>{l.tel || '—'}</td>
+                <td className="ad-loc-hours">{l.hours || '—'}</td>
+                <td className="ad-td-actions">
+                  <button className="ad-btn ad-btn--soft ad-btn--sm"
+                    onClick={() => setEditing({ initial: l, isNew: false })}>Edit</button>
+                  {canDelete && (
+                    <button className="ad-btn ad-btn--danger ad-btn--sm"
+                      onClick={() => setConfirm(l.id)}>Delete</button>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {filtered.length === 0 && (
+              <tr><td colSpan={6} className="ad-empty">No clinics match this filter.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {target && (
+        <div className="ad-drawer-scrim" onClick={() => setConfirm(null)}>
+          <div className="ad-confirm" onClick={e => e.stopPropagation()}>
+            <h3 className="ad-confirm-title">Delete clinic?</h3>
+            <p className="ad-confirm-text">
+              <strong>{target.name}</strong> will be removed from the Find a Clinic page.
+            </p>
+            <div className="ad-confirm-actions">
+              <button className="ad-btn ad-btn--ghost" onClick={() => setConfirm(null)}>Cancel</button>
+              <button className="ad-btn ad-btn--danger"
+                onClick={() => { deleteLocation(target.id); setConfirm(null) }}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function LocationForm({ initial, isNew, existing, onSave, onClose }) {
+  const [form, setForm] = useState({ ...initial })
+  const [error, setError] = useState('')
+  const originalId = isNew ? null : initial.id
+
+  function set(field, value) { setForm(f => ({ ...f, [field]: value })) }
+
+  function submit(e) {
+    e.preventDefault()
+    const name = form.name.trim()
+    if (!name) return setError('Clinic name is required.')
+    const id = form.id.trim() || slugify(name)
+    if (existing.some(l => l.id === id && l.id !== originalId)) {
+      return setError(`The id "${id}" is already in use.`)
+    }
+    onSave({ ...form, id, name }, originalId)
+  }
+
+  // Google Maps embeds are driven by a search query rather than coordinates,
+  // matching how the public Find Us section builds its iframe URL.
+  const mapQ = (form.mapQ || '').trim()
+
+  return (
+    <form className="ad-editor" onSubmit={submit}>
+      <div className="ad-editor-head">
+        <button type="button" className="ad-back" onClick={onClose}>← Back</button>
+        <div className="ad-editor-titles">
+          <h1 className="ad-view-title">{isNew ? 'New clinic' : 'Edit clinic'}</h1>
+          <p className="ad-view-sub">{isNew ? 'Add a location to the Find a Clinic page.' : form.id}</p>
+        </div>
+        <div className="ad-editor-actions">
+          <button type="button" className="ad-btn ad-btn--ghost" onClick={onClose}>Cancel</button>
+          <button type="submit" className="ad-btn ad-btn--primary">
+            {isNew ? 'Create clinic' : 'Save changes'}
+          </button>
+        </div>
+      </div>
+
+      {error && <div className="ad-form-error ad-editor-error">{error}</div>}
+
+      <div className="ad-editor-body">
+        <fieldset className="ad-fieldset">
+          <legend>Basics</legend>
+          <div className="ad-grid2">
+            <label className="ad-field">
+              <span className="ad-field-label">Clinic name *</span>
+              <input className="ad-input" value={form.name} onChange={e => set('name', e.target.value)} />
+            </label>
+            <label className="ad-field">
+              <span className="ad-field-label">ID</span>
+              <input className="ad-input" value={form.id}
+                placeholder={slugify(form.name) || 'auto'}
+                onChange={e => set('id', e.target.value)} />
+            </label>
+          </div>
+          <div className="ad-grid2">
+            <label className="ad-field">
+              <span className="ad-field-label">Country</span>
+              <select className="ad-input" value={form.country} onChange={e => set('country', e.target.value)}>
+                {CLINIC_COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </label>
+            <label className="ad-field">
+              <span className="ad-field-label">City</span>
+              <input className="ad-input" value={form.city} onChange={e => set('city', e.target.value)}
+                placeholder="e.g. Dubai" />
+            </label>
+          </div>
+          <label className="ad-field">
+            <span className="ad-field-label">Address</span>
+            <textarea className="ad-textarea" rows={2} value={form.addr}
+              onChange={e => set('addr', e.target.value)} />
+          </label>
+        </fieldset>
+
+        <fieldset className="ad-fieldset">
+          <legend>Contact &amp; hours</legend>
+          <div className="ad-grid2">
+            <label className="ad-field">
+              <span className="ad-field-label">Telephone</span>
+              <input className="ad-input" value={form.tel} onChange={e => set('tel', e.target.value)}
+                placeholder="04 450 1001" />
+            </label>
+            <label className="ad-field">
+              <span className="ad-field-label">Timings</span>
+              <input className="ad-input" value={form.hours} onChange={e => set('hours', e.target.value)}
+                placeholder="All 7 days: 10:00 AM – 9:00 PM" />
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset className="ad-fieldset">
+          <legend>Map</legend>
+          <p className="ad-fieldset-hint">
+            The search phrase used for the embedded map and the “Get direction” link.
+          </p>
+          <label className="ad-field">
+            <span className="ad-field-label">Map query</span>
+            <input className="ad-input" value={form.mapQ} onChange={e => set('mapQ', e.target.value)}
+              placeholder="Kaya+Clinic+Dubai+Marina" />
+          </label>
+          {mapQ && (
+            <a className="ad-btn ad-btn--soft ad-btn--sm"
+              href={`https://maps.google.com/?q=${mapQ}`} target="_blank" rel="noreferrer">
+              Preview on Google Maps ↗
+            </a>
+          )}
+        </fieldset>
+      </div>
+    </form>
+  )
+}

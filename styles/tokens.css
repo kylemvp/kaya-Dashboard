@@ -1,0 +1,87 @@
+/* ─────────────────────────────────────────────────────────────
+   KAYA DESIGN TOKENS
+   Single source of truth. Change a value here — it updates
+   everywhere across the site automatically.
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+
+  /* ── COLOR: BRAND ──────────────────────────────────────────
+     Soft, pastel-leaning purple palette. Adjust any hex to
+     retheme the entire brand instantly.                       */
+  --deep:    #372B4D;   /* Darkest — headings, hero bg        */
+  --primary: #6E5A96;   /* Primary brand purple                */
+  --mid:     #8570A8;   /* Mid-tone — icons, badges            */
+  --lilac:   #C3B6DE;   /* Pastel lilac — accents, borders, highlights */
+  --lilac-lt:#F1EAFB;   /* Light lilac — pill backgrounds      */
+
+  /* ── COLOR: NEUTRAL ───────────────────────────────────────── */
+  --mist:    #F1EDFA;   /* Section bg, light fills             */
+  --whisper: #FAF9FC;   /* Very light bg — alternating sections*/
+  --ivory:   #ffffff;   /* Page background                     */
+  --cream:   #F2ECE4;   /* Warm cream — CTA backgrounds        */
+  --ink:     #241C36;   /* Body text — near-black              */
+  --slate:   #665F7A;   /* Secondary text — descriptions       */
+  --line:    #EAE4F5;   /* Borders, dividers                   */
+  --white:   #ffffff;
+
+  /* ── TYPOGRAPHY: FAMILIES ───────────────────────────────────
+     Swap a font family here to update all headings or body
+     copy across the entire site.                              */
+  --ff-d: 'Playfair Display', Georgia, serif; /* Display / serif headings */
+  --ff-b: 'Inter', Arial, sans-serif;         /* Body / sans-serif        */
+
+  /* ── TYPOGRAPHY: SCALE ────────────────────────────────────── */
+  --text-hero: 58px;   /* Main hero headline                   */
+  --text-3xl:  38px;   /* Section titles                       */
+  --text-2xl:  24px;   /* Card titles                          */
+  --text-xl:   21px;   /* Sub-headings                         */
+  --text-lg:   16px;   /* Large body text                      */
+  --text-base: 14px;   /* Body text                            */
+  --text-sm:   13px;   /* Small text, captions                 */
+  --text-xs:   11px;   /* Labels, tags, fine print             */
+
+  /* ── PAGE HORIZONTAL PADDING ─────────────────────────────── */
+  --page-x:    32px;   /* Desktop — single consistent outer gutter */
+  --page-x-md: 32px;   /* Tablet ~900px                            */
+  --page-x-sm: 32px;   /* Mobile ~640px                            */
+
+  /* ── SPACING ──────────────────────────────────────────────── */
+  --space-1:   4px;
+  --space-2:   8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+
+  /* ── BORDER RADIUS ────────────────────────────────────────── */
+  --r:      4px;    /* Default — inputs, small elements         */
+  --r-lg:  14px;    /* Cards, dropdowns                         */
+  --r-xl:  22px;    /* Large modals, overlays                   */
+  --r-full: 999px;  /* Pills, badges, tags                      */
+
+  /* ── SHADOW ───────────────────────────────────────────────── */
+  --shadow-xs: 0 1px 3px rgba(60,40,100,.05);     /* Subtle lift          */
+  --shadow-sm: 0 6px 24px rgba(45,27,78,.08);     /* Card resting state   */
+  --shadow-md: 0 12px 36px rgba(45,27,78,.12);    /* Card hover / tooltip */
+  --shadow-lg: 0 16px 48px rgba(45,27,78,.15);    /* Dropdown / prominent */
+  --shadow-xl: 0 40px 100px rgba(28,15,56,.32);   /* Deep modal           */
+
+  /* ── EASING & DURATION ────────────────────────────────────── */
+  --ease:   cubic-bezier(.22,.61,.36,1);  /* Signature curve — use for all entrances */
+  --t-fast: .2s;   /* Hover states, small toggles              */
+  --t-base: .35s;  /* Panel slides, modal entrances            */
+  --t-slow: .65s;  /* Splash, hero animations                  */
+
+  /* ── Z-INDEX STACK ────────────────────────────────────────── */
+  --z-header:   100;
+  --z-dropdown: 200;
+  --z-modal:   9000;
+  --z-overlay: 9998;
+  --z-splash:  9999;
+}
