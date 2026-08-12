@@ -3,6 +3,7 @@ import './admin.css'
 import { AdminProvider, useAdmin } from '@/components/admin/AdminContext'
 import LoginScreen from '@/components/admin/LoginScreen'
 import AdminShell from '@/components/admin/AdminShell'
+import CrashGuard from '@/components/admin/CrashGuard'
 
 function Gate() {
   const { ready, user } = useAdmin()
@@ -15,8 +16,10 @@ function Gate() {
 
 export default function AdminPage() {
   return (
-    <AdminProvider>
-      <Gate />
-    </AdminProvider>
+    <CrashGuard>
+      <AdminProvider>
+        <Gate />
+      </AdminProvider>
+    </CrashGuard>
   )
 }

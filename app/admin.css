@@ -860,3 +860,30 @@
   .ad-demo-tag { font-size: 9px; padding: 3px 7px; letter-spacing: .05em; }
   .ad-user { gap: 7px; }
 }
+
+/* ── Crash screen ───────────────────────────────────────── */
+/* A blank page tells the user nothing and offers no way out; this does both. */
+.ad-crash {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  padding: 24px; background: #F6F4FB; font-family: var(--ff-b);
+}
+.ad-crash-card {
+  width: 100%; max-width: 520px; background: #fff;
+  border: 1px solid var(--line); border-radius: 18px; padding: 32px;
+  box-shadow: 0 24px 60px rgba(90,70,140,.14);
+  display: flex; flex-direction: column; gap: 14px; align-items: flex-start;
+}
+.ad-crash-title {
+  font-size: 1.3rem; font-weight: 700; color: var(--ink); letter-spacing: -.01em;
+}
+.ad-crash-text { font-size: 13.5px; line-height: 1.6; color: var(--slate); margin: 0; }
+.ad-crash-details { width: 100%; margin-top: 4px; }
+.ad-crash-details summary {
+  font-size: 12px; color: var(--slate); cursor: pointer; padding: 4px 0;
+}
+.ad-crash-details pre {
+  margin-top: 8px; padding: 12px; background: var(--whisper);
+  border: 1px solid var(--line); border-radius: 8px;
+  font-size: 11px; line-height: 1.5; color: #B23B3B;
+  white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow: auto;
+}
