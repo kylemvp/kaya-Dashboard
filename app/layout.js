@@ -50,35 +50,50 @@ const DIAGNOSTIC = `
     // The app mounted — nothing to report.
     if (document.querySelector('.ad-login, .ad-shell, .ad-crash')) return;
 
+    // The panel is APPENDED, never swapped in for the page. An earlier version
+    // replaced document.body, which meant a merely slow start was destroyed
+    // by the very thing meant to diagnose it. Adding cannot break anything.
     var rows = [
       ['Browser', navigator.userAgent],
       ['Page', location.href],
-      ['Scripts that failed to load', failed.length ? failed.join('\\n') : 'none'],
+      ['Scripts that failed', failed.length ? failed.join('\\n') : 'none'],
       ['Errors', errors.length ? errors.join('\\n') : 'none recorded'],
+      ['Body content', document.body.innerText.trim().slice(0, 120) || '(empty)'],
     ];
 
-    document.body.innerHTML =
-      '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;' +
-      'font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#F6F4FB;color:#241C36">' +
-      '<div style="width:100%;max-width:680px;background:#fff;border:1px solid #EAE4F5;border-radius:18px;' +
-      'padding:32px;box-shadow:0 24px 60px rgba(90,70,140,.14)">' +
-      '<h1 style="margin:0 0 6px;font-size:20px;font-weight:700">The dashboard did not start</h1>' +
-      '<p style="margin:0 0 20px;font-size:13.5px;line-height:1.6;color:#665F7A">' +
-      'The page loaded but nothing rendered. The details below say why — please send a screenshot of this.</p>' +
+    var box = document.createElement('div');
+    box.setAttribute('data-kaya-diagnostic', '');
+    box.style.cssText = 'position:fixed;inset:auto 16px 16px 16px;z-index:2147483647;max-height:70vh;' +
+      'overflow:auto;background:#fff;border:1px solid #EAE4F5;border-radius:14px;padding:20px;' +
+      'box-shadow:0 24px 60px rgba(90,70,140,.22);font-family:system-ui,-apple-system,sans-serif;color:#241C36';
+
+    box.innerHTML =
+      '<div style="font-size:15px;font-weight:700;margin-bottom:4px">The dashboard has not started</div>' +
+      '<div style="font-size:12.5px;line-height:1.55;color:#665F7A;margin-bottom:16px">' +
+      'Still loading after 12 seconds. Please send a screenshot of this panel.</div>' +
       rows.map(function (r) {
-        return '<div style="margin-bottom:14px">' +
-          '<div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#665F7A;' +
-          'margin-bottom:5px">' + esc(r[0]) + '</div>' +
-          '<pre style="margin:0;padding:10px 12px;background:#FAF9FC;border:1px solid #EAE4F5;border-radius:8px;' +
-          'font-size:11px;line-height:1.55;white-space:pre-wrap;word-break:break-word;color:#B23B3B">' +
+        return '<div style="margin-bottom:11px">' +
+          '<div style="font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;' +
+          'color:#665F7A;margin-bottom:4px">' + esc(r[0]) + '</div>' +
+          '<pre style="margin:0;padding:9px 11px;background:#FAF9FC;border:1px solid #EAE4F5;border-radius:7px;' +
+          'font-size:10.5px;line-height:1.5;white-space:pre-wrap;word-break:break-word;color:#B23B3B">' +
           esc(r[1]) + '</pre></div>';
       }).join('') +
-      '<button onclick="try{Object.keys(localStorage).filter(function(k){return k.indexOf(\\'kaya_admin_\\')===0})' +
-      '.forEach(function(k){localStorage.removeItem(k)})}catch(e){};location.reload()" ' +
-      'style="margin-top:6px;background:#6E5A96;color:#fff;border:0;border-radius:9px;padding:11px 18px;' +
-      'font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Clear saved data &amp; reload</button>' +
-      '</div></div>';
-  }, 6000);
+      '<button id="kaya-diag-reset" style="background:#6E5A96;color:#fff;border:0;border-radius:9px;' +
+      'padding:10px 16px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">' +
+      'Clear saved data &amp; reload</button>';
+
+    document.body.appendChild(box);
+
+    document.getElementById('kaya-diag-reset').addEventListener('click', function () {
+      try {
+        Object.keys(localStorage)
+          .filter(function (k) { return k.indexOf('kaya_admin_') === 0; })
+          .forEach(function (k) { localStorage.removeItem(k); });
+      } catch (e) { /* storage unavailable — reloading is still worth a try */ }
+      location.reload();
+    });
+  }, 12000);
 })();
 `
 
