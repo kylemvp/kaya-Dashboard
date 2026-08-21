@@ -887,3 +887,7 @@
   font-size: 11px; line-height: 1.5; color: #B23B3B;
   white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow: auto;
 }
+
+/* The Requests toolbar carries six controls; let it wrap into tidy rows
+   instead of squeezing every select below its readable width. */
+.ad-toolbar .ad-btn--sm { align-self: center; white-space: nowrap; }

@@ -3,12 +3,23 @@ import { useMemo, useState } from 'react'
 import { useAdmin } from './AdminContext'
 import ConfirmDialog from './ConfirmDialog'
 import { siteUrl } from '@/lib/site'
+import { toCsv, downloadCsv, stampedName } from '@/lib/admin/csv'
 import {
   REQUEST_STATUS_OPTIONS,
   REQUEST_SOURCE_OPTIONS,
   REQUEST_STATUS_LABELS,
   REQUEST_SOURCE_LABELS,
 } from '@/lib/admin/seed'
+
+// Date ranges offered in the toolbar. `days` counts back from now; null is
+// "no limit" so the option list stays a single flat shape.
+const DATE_RANGES = [
+  { id: '', label: 'Any time', days: null },
+  { id: '1', label: 'Last 24 hours', days: 1 },
+  { id: '7', label: 'Last 7 days', days: 7 },
+  { id: '30', label: 'Last 30 days', days: 30 },
+  { id: '90', label: 'Last 90 days', days: 90 },
+]
 
 function StatusPill({ status }) {
   return (
@@ -49,10 +60,26 @@ export default function RequestsView() {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('')
   const [source, setSource] = useState('')
+  const [country, setCountry] = useState('')
+  const [city, setCity] = useState('')
+  const [range, setRange] = useState('')
   const [openId, setOpenId] = useState(null)
   const [confirm, setConfirm] = useState(null)
 
   const canDelete = allowed('delete')
+
+  // Location options come from the enquiries themselves, so a new city the
+  // site starts sending appears here without a code change. Cities narrow to
+  // the selected country — offering Riyadh while filtering UAE is a dead end.
+  const countries = useMemo(
+    () => [...new Set(requests.map(r => r.country).filter(Boolean))].sort(),
+    [requests],
+  )
+
+  const cities = useMemo(() => {
+    const pool = country ? requests.filter(r => r.country === country) : requests
+    return [...new Set(pool.map(r => r.city).filter(Boolean))].sort()
+  }, [requests, country])
 
   const counts = useMemo(() => {
     const c = { new: 0, contacted: 0, booked: 0, closed: 0 }
@@ -62,10 +89,21 @@ export default function RequestsView() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
+    const days = DATE_RANGES.find(d => d.id === range)?.days
+    const cutoff = days ? Date.now() - days * 86400_000 : null
+
     return requests
       .filter(r => {
         if (status && r.status !== status) return false
         if (source && r.source !== source) return false
+        if (country && r.country !== country) return false
+        if (city && r.city !== city) return false
+        if (cutoff) {
+          const at = new Date(r.createdAt).getTime()
+          // An unparseable date is kept rather than silently dropped — losing
+          // an enquiry from a filter is worse than showing an extra row.
+          if (Number.isFinite(at) && at < cutoff) return false
+        }
         if (q) {
           const hay = `${r.name} ${r.mobile} ${r.email} ${r.city} ${r.treatmentArea} ${r.treatment} ${r.doctor} ${(r.concerns || []).join(' ')}`.toLowerCase()
           if (!hay.includes(q)) return false
@@ -75,9 +113,37 @@ export default function RequestsView() {
       // Newest first.
       .slice()
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-  }, [requests, query, status, source])
+  }, [requests, query, status, source, country, city, range])
 
   const open = openId ? requests.find(r => r.id === openId) : null
+
+  const isFiltered = Boolean(query.trim() || status || source || country || city || range)
+
+  /**
+   * Export what is on screen, not the whole table — the filters are how you
+   * choose what to send someone, so exporting past them would be surprising.
+   * Notes are included: they are the team's own record of each enquiry.
+   */
+  function exportCsv() {
+    const csv = toCsv(filtered, [
+      { header: 'Received', value: r => formatDate(r.createdAt) },
+      { header: 'Status', value: r => REQUEST_STATUS_LABELS[r.status] || r.status },
+      { header: 'Source', value: r => REQUEST_SOURCE_LABELS[r.source] || r.source },
+      { header: 'Name', value: r => r.name },
+      { header: 'Mobile', value: r => r.mobile },
+      { header: 'Email', value: r => r.email },
+      { header: 'Gender', value: r => r.gender },
+      { header: 'Country', value: r => r.country },
+      { header: 'City', value: r => r.city },
+      { header: 'Treatment area', value: r => r.treatmentArea },
+      { header: 'Treatment', value: r => r.treatment },
+      { header: 'Doctor', value: r => r.doctor },
+      { header: 'Concerns', value: r => r.concerns },
+      { header: 'Message', value: r => r.message },
+      { header: 'Internal note', value: r => r.notes },
+    ])
+    downloadCsv(stampedName('kaya-enquiries'), csv)
+  }
 
   return (
     <div className="ad-view">
@@ -88,6 +154,16 @@ export default function RequestsView() {
             {requests.length} enquiries from the site · {counts.new} new
           </p>
         </div>
+        <button
+          className="ad-btn ad-btn--primary"
+          onClick={exportCsv}
+          disabled={filtered.length === 0}
+          title={filtered.length === 0
+            ? 'Nothing to export'
+            : `Download ${filtered.length} ${filtered.length === 1 ? 'enquiry' : 'enquiries'} as CSV`}
+        >
+          ↓ Export {isFiltered ? `${filtered.length} shown` : 'all'}
+        </button>
       </div>
 
       {/* Status summary chips (also act as quick filters) */}
@@ -122,6 +198,35 @@ export default function RequestsView() {
             <option key={s} value={s}>{REQUEST_STATUS_LABELS[s]}</option>
           ))}
         </select>
+        <select
+          className="ad-input ad-filter"
+          value={country}
+          // Changing country clears the city, which may not exist in the new one.
+          onChange={e => { setCountry(e.target.value); setCity('') }}
+        >
+          <option value="">All countries</option>
+          {countries.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select
+          className="ad-input ad-filter"
+          value={city}
+          onChange={e => setCity(e.target.value)}
+          disabled={cities.length === 0}
+        >
+          <option value="">All cities</option>
+          {cities.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select className="ad-input ad-filter" value={range} onChange={e => setRange(e.target.value)}>
+          {DATE_RANGES.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
+        </select>
+        {isFiltered && (
+          <button
+            className="ad-btn ad-btn--ghost ad-btn--sm"
+            onClick={() => { setQuery(''); setStatus(''); setSource(''); setCountry(''); setCity(''); setRange('') }}
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       <div className="ad-table-wrap">
@@ -173,7 +278,11 @@ export default function RequestsView() {
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={6} className="ad-empty">No requests match your filters.</td></tr>
+              <tr><td colSpan={6} className="ad-empty">
+                {requests.length === 0
+                  ? 'No enquiries yet. They arrive here from the booking form and the concern finder.'
+                  : 'No enquiries match your filters.'}
+              </td></tr>
             )}
           </tbody>
         </table>
