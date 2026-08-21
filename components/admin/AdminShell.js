@@ -14,6 +14,7 @@ import LocationsView from './LocationsView'
 import SiteView from './SiteView'
 import UsersView from './UsersView'
 import PublishButton from './PublishButton'
+import CountrySwitcher from './CountrySwitcher'
 import { SITE_URL } from '@/lib/site'
 
 // Nav is grouped so the catalogue (records) and the website (page copy) read as
@@ -128,6 +129,7 @@ export default function AdminShell() {
           )}
           {saving && <span className="ad-saving">Saving…</span>}
           <div className="ad-topbar-right">
+            <CountrySwitcher />
             <a href={SITE_URL} className="ad-btn ad-btn--ghost" target="_blank" rel="noreferrer">
               View site ↗
             </a>

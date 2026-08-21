@@ -12,12 +12,21 @@ import { SectionFields } from './ContentFields'
  * `seed`    — the same shape, freshly seeded, used by the per-section revert
  * `onSave`  — called once per changed section: (sectionId, sectionValues)
  */
-export default function ContentEditor({ group, values, seed, onSave, canEdit = true, children }) {
+export default function ContentEditor({
+  group, values, seed, onSave, canEdit = true, children,
+  /**
+   * Which market's copy is on screen. The draft has to be rebuilt when this
+   * changes, or switching country leaves the previous market's unsaved text in
+   * the inputs — and saving would then write it into the wrong country.
+   */
+  scopeKey = '',
+}) {
   const [draft, setDraft] = useState(values || {})
   const [saved, setSaved] = useState(false)
 
-  // Re-seed the draft when the editor is pointed at a different group.
-  useEffect(() => { setDraft(values || {}); setSaved(false) }, [group.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Re-seed the draft when the editor is pointed at a different group, or at
+  // the same group in a different market.
+  useEffect(() => { setDraft(values || {}); setSaved(false) }, [group.id, scopeKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const changed = useMemo(
     () => group.sections.filter(s => !same(draft[s.id], values?.[s.id])).map(s => s.id),

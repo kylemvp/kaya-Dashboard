@@ -2,11 +2,12 @@
 import { useMemo, useState } from 'react'
 import { useAdmin } from './AdminContext'
 import ContentEditor from './ContentEditor'
+import CountryNotice from './CountryNotice'
 import { SITE_GROUPS, seedSite } from '@/lib/admin/content'
 
 /** Site-wide content: the footer, and the brand/contact details reused everywhere. */
 export default function SiteView() {
-  const { site, updateSiteSection, allowed } = useAdmin()
+  const { site, saveSection, allowed, activeCountry } = useAdmin()
   const [tab, setTab] = useState(SITE_GROUPS[0].id)
 
   // Kept for the per-section "Revert" action, which restores the original copy.
@@ -38,7 +39,7 @@ export default function SiteView() {
         values={site[group.id]}
         seed={seeded[group.id]}
         canEdit={allowed('edit')}
-        onSave={(sectionId, sectionValues) => updateSiteSection(group.id, sectionId, sectionValues)}
+        onSave={(sectionId, sectionValues) => saveSection('site', group.id, sectionId, sectionValues)}
       >
         <span className="ad-cf-count">{group.hint}</span>
       </ContentEditor>

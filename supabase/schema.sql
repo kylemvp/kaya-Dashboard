@@ -127,12 +127,19 @@ create table if not exists public.services (
   benefits   jsonb  not null default '[]'::jsonb,
   suitable   text[] not null default '{}',
   verticals  text[] not null default '{}',
+  -- Countries offering this treatment. EMPTY means every country: a newly
+  -- created service is live everywhere rather than invisible until configured.
+  countries  text[] not null default '{}',
+  -- Per-country price: { "UAE": { "price": "1200", "currency": "AED" }, … }.
+  -- jsonb rather than columns so adding a market needs no migration.
+  pricing    jsonb  not null default '{}'::jsonb,
   sort       integer not null default 0,
   updated_at timestamptz not null default now()
 );
 
 -- Services are filtered by vertical on nearly every public page.
 create index if not exists services_verticals_idx on public.services using gin (verticals);
+create index if not exists services_countries_idx on public.services using gin (countries);
 
 create table if not exists public.doctors (
   slug       text primary key,
@@ -176,6 +183,8 @@ create table if not exists public.vouchers (
   price       text not null default '',
   currency    text not null default 'AED',
   img         text not null default '',
+  countries   text[] not null default '{}',
+  pricing     jsonb  not null default '{}'::jsonb,
   sort        integer not null default 0,
   updated_at  timestamptz not null default now()
 );
@@ -204,7 +213,12 @@ create table if not exists public.locations (
 -- `scope` separates the two trees: 'page' (PAGES) and 'site' (SITE_GROUPS).
 -- ============================================================================
 create table if not exists public.content (
-  scope      text not null check (scope in ('page', 'site')),
+  -- 'page' and 'site' hold the shared copy every market inherits.
+  -- 'country:UAE' (and friends) hold only the fields that market overrides,
+  -- so shared copy stays editable in one place. See lib/admin/country-content.js.
+  scope      text not null check (
+    scope in ('page', 'site') or scope ~ '^country:[A-Za-z]+$'
+  ),
   group_id   text not null,
   section_id text not null,
   data       jsonb not null default '{}'::jsonb,
@@ -376,4 +390,30 @@ begin
     execute format(
       'create trigger %I_touch before update on public.%I for each row execute function public.touch_updated_at()', t, t);
   end loop;
+end $$;
+
+
+-- ============================================================================
+-- Upgrading a database created before per-country content
+-- ----------------------------------------------------------------------------
+-- Safe to run on a fresh project too — every statement is guarded.
+-- ============================================================================
+alter table public.services add column if not exists countries text[] not null default '{}';
+alter table public.services add column if not exists pricing   jsonb  not null default '{}'::jsonb;
+alter table public.vouchers add column if not exists countries text[] not null default '{}';
+alter table public.vouchers add column if not exists pricing   jsonb  not null default '{}'::jsonb;
+
+-- Doctors were filed under 'OMAN' while clinics and enquiries used 'Oman'.
+-- Nothing compared the two, so the mismatch was invisible until content had to
+-- be filtered by country.
+update public.doctors
+   set countries = array_replace(countries, 'OMAN', 'Oman')
+ where 'OMAN' = any (countries);
+
+-- Widen the scope check so country overrides are accepted.
+do $$
+begin
+  alter table public.content drop constraint if exists content_scope_check;
+  alter table public.content add constraint content_scope_check
+    check (scope in ('page', 'site') or scope ~ '^country:[A-Za-z]+$');
 end $$;

@@ -2,6 +2,8 @@
 import { useState } from 'react'
 import { useAdmin } from './AdminContext'
 import { VOUCHER_TYPE_OPTIONS, BADGE_STYLE_OPTIONS } from '@/lib/admin/seed'
+import CountryFields from './CountryFields'
+import { normalisePricing } from '@/lib/countries'
 import ImagePicker from './ImagePicker'
 
 function slugify(str) {
@@ -19,7 +21,15 @@ function cloneSafe(obj) {
 
 export default function VoucherForm({ initial, isNew, onClose }) {
   const { vouchers, upsertVoucher } = useAdmin()
-  const [form, setForm] = useState(() => cloneSafe(initial))
+  // Back-fill the per-country fields for vouchers saved before they existed.
+  const [form, setForm] = useState(() => {
+    const base = cloneSafe(initial)
+    return {
+      ...base,
+      countries: Array.isArray(base.countries) ? base.countries : [],
+      pricing: normalisePricing(base.pricing),
+    }
+  })
   const [error, setError] = useState('')
   const originalId = isNew ? null : initial.id
 
@@ -97,6 +107,15 @@ export default function VoucherForm({ initial, isNew, onClose }) {
                 onChange={e => set('currency', e.target.value)} />
             </label>
           </div>
+        </fieldset>
+
+        <fieldset className="ad-fieldset">
+          <legend>Countries &amp; pricing</legend>
+          <CountryFields
+            countries={form.countries}
+            pricing={form.pricing}
+            onChange={patch => setForm(f => ({ ...f, ...patch }))}
+          />
         </fieldset>
 
         <fieldset className="ad-fieldset">

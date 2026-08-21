@@ -891,3 +891,63 @@
 /* The Requests toolbar carries six controls; let it wrap into tidy rows
    instead of squeezing every select below its readable width. */
 .ad-toolbar .ad-btn--sm { align-self: center; white-space: nowrap; }
+
+/* ── Country switcher ───────────────────────────────────── */
+/* Reads as a mode selector, not another form field: which market am I editing
+   right now. Tinted when a specific country is active so the difference from
+   "All countries" is visible at a glance. */
+.ad-country {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 5px 10px 5px 12px;
+  background: var(--whisper); border: 1px solid var(--line); border-radius: var(--r-full);
+}
+.ad-country-label {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--slate); white-space: nowrap;
+}
+.ad-country-select {
+  border: 0; background: none; font-family: var(--ff-b); font-size: 12.5px;
+  font-weight: 600; color: var(--primary); cursor: pointer; padding: 2px 0;
+}
+.ad-country-select:focus { outline: none; }
+.ad-country:has(.ad-country-select:not([value=""])) {
+  background: var(--lilac-lt); border-color: var(--lilac);
+}
+
+@media (max-width: 900px) { .ad-country-label { display: none; } }
+@media (max-width: 560px) { .ad-country { padding: 4px 8px; } }
+
+/* ── Per-country availability + pricing ─────────────────── */
+.ad-country-fields { display: flex; flex-direction: column; gap: 16px; }
+.ad-check-row { display: flex; flex-wrap: wrap; gap: 14px; }
+.ad-check {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; color: var(--ink); cursor: pointer;
+}
+.ad-price-grid { display: flex; flex-direction: column; gap: 8px; }
+.ad-price-row {
+  display: grid; grid-template-columns: 56px 1fr 82px; gap: 8px; align-items: center;
+}
+/* A country the record isn't sold in keeps its row visible but inert, so the
+   set of markets stays readable instead of rows appearing and vanishing. */
+.ad-price-row.is-off { opacity: .45; }
+.ad-price-country {
+  font-size: 11px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--slate);
+}
+.ad-price-input { font-variant-numeric: tabular-nums; }
+.ad-price-cur { text-align: center; text-transform: uppercase; }
+
+@media (max-width: 560px) {
+  .ad-price-row { grid-template-columns: 48px 1fr 70px; gap: 6px; }
+}
+
+/* Which copy am I editing — shared, or one market's differences. */
+.ad-note--shared { border-left-color: var(--mid); }
+.ad-note--country {
+  border-left-color: #B98A2E; background: #FDF8EC; border-color: #F0E2C4;
+  display: flex; align-items: flex-start; gap: 14px; justify-content: space-between;
+}
+.ad-note--country strong { color: #7A5A14; }
+.ad-note--country .ad-btn { flex-shrink: 0; }
+@media (max-width: 560px) { .ad-note--country { flex-direction: column; } }

@@ -3,6 +3,8 @@ import { useState } from 'react'
 import { useAdmin } from './AdminContext'
 import { THUMB_OPTIONS, BADGE_OPTIONS } from '@/lib/admin/seed'
 import { TREATMENT_CATEGORIES } from '@/lib/taxonomy'
+import CountryFields from './CountryFields'
+import { normalisePricing } from '@/lib/countries'
 
 function slugify(str) {
   return String(str)
@@ -20,7 +22,17 @@ function cloneSafe(obj) {
 
 export default function ServiceForm({ initial, isNew, onClose }) {
   const { verticals, upsertService, services } = useAdmin()
-  const [form, setForm] = useState(() => ({ image: '', ...cloneSafe(initial) }))
+  // A record saved before per-country fields existed has neither, so they are
+  // back-filled here rather than every input having to cope with undefined.
+  const [form, setForm] = useState(() => {
+    const base = cloneSafe(initial)
+    return {
+      image: '',
+      ...base,
+      countries: Array.isArray(base.countries) ? base.countries : [],
+      pricing: normalisePricing(base.pricing),
+    }
+  })
   const [error, setError] = useState('')
   const originalSlug = isNew ? null : initial.slug
 
@@ -217,6 +229,15 @@ export default function ServiceForm({ initial, isNew, onClose }) {
               </select>
             </label>
           </div>
+        </fieldset>
+
+        <fieldset className="ad-fieldset">
+          <legend>Countries &amp; pricing</legend>
+          <CountryFields
+            countries={form.countries}
+            pricing={form.pricing}
+            onChange={patch => setForm(f => ({ ...f, ...patch }))}
+          />
         </fieldset>
 
         <fieldset className="ad-fieldset">

@@ -12,8 +12,11 @@ import {
   persistRequestPatch, removeRequest,
   refetchRequests, subscribeToRequests,
   fetchUsers, updateUserRole,
+  fetchOverrides, persistOverrideSection,
   isDemoMode, resetDemo as resetDemoData,
 } from '@/lib/admin/store'
+import { resolveContent, setOverride, clearSectionOverride } from '@/lib/admin/country-content'
+import { COUNTRY_IDS } from '@/lib/countries'
 import { signIn, signOut, getCurrentUser, onAuthChange, can } from '@/lib/admin/auth'
 
 const AdminContext = createContext(null)
@@ -46,6 +49,9 @@ export function AdminProvider({ children }) {
   const [site, setSite] = useState({})
   const [locations, setLocations] = useState([])
   const [users, setUsers] = useState([])
+  // '' means "all countries" — editing the shared copy every market inherits.
+  const [activeCountry, setActiveCountry] = useState('')
+  const [overrides, setOverrides] = useState({})
 
   // Guards against a slow load from a previous session overwriting fresh state
   // after a sign-out / sign-in.
@@ -68,9 +74,10 @@ export function AdminProvider({ children }) {
     const token = ++loadToken.current
     setLoading(true)
     try {
-      const data = await fetchAll()
+      const [data, ov] = await Promise.all([fetchAll(), fetchOverrides()])
       if (token !== loadToken.current) return
       applyAll(data)
+      setOverrides(ov || {})
       setError('')
     } catch (e) {
       if (token !== loadToken.current) return
@@ -373,6 +380,99 @@ export function AdminProvider({ children }) {
     }
   }, [site])
 
+  // ── Country-scoped content ────────────────────────────
+  // Views read these instead of `pages`/`site` directly, so switching country
+  // changes what every editor screen shows without each one knowing how
+  // overrides work.
+  // Memoised because the `|| {}` fallback would otherwise mint a fresh object
+  // every render, defeating the two memos below.
+  const countryOverrides = useMemo(
+    () => (activeCountry ? (overrides[activeCountry] || {}) : null),
+    [activeCountry, overrides],
+  )
+
+  const resolvedPages = useMemo(
+    () => (countryOverrides ? resolveContent(pages, countryOverrides) : pages),
+    [pages, countryOverrides],
+  )
+  const resolvedSite = useMemo(
+    () => (countryOverrides ? resolveContent(site, countryOverrides) : site),
+    [site, countryOverrides],
+  )
+
+  /**
+   * Save a section. With no country selected this edits the shared copy; with
+   * one selected it records an override for that country only, so shared copy
+   * stays editable in one place.
+   */
+  const saveSection = useCallback(async (scope, groupId, sectionId, patch) => {
+    const baseTree = scope === 'site' ? site : pages
+    const setTree = scope === 'site' ? setSite : setPages
+    const persistBase = scope === 'site' ? persistSiteSection : persistPageSection
+
+    if (!activeCountry) {
+      const prev = baseTree
+      const merged = { ...prev[groupId]?.[sectionId], ...patch }
+      setTree({ ...prev, [groupId]: { ...prev[groupId], [sectionId]: merged } })
+      setSaving(true)
+      try {
+        await persistBase(groupId, sectionId, merged)
+        setError('')
+      } catch (e) {
+        setTree(prev)
+        setError(e.message)
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
+
+    const prev = overrides
+    let next = overrides[activeCountry] || {}
+    for (const [key, value] of Object.entries(patch)) {
+      next = setOverride(next, baseTree, groupId, sectionId, key, value)
+    }
+
+    const all = { ...prev }
+    if (Object.keys(next).length) all[activeCountry] = next
+    else delete all[activeCountry]
+
+    setOverrides(all)
+    setSaving(true)
+    try {
+      await persistOverrideSection(activeCountry, groupId, sectionId, next[groupId]?.[sectionId] || {})
+      setError('')
+    } catch (e) {
+      setOverrides(prev)
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }, [activeCountry, overrides, pages, site])
+
+  /** Drop a country's overrides for one section, back to the shared copy. */
+  const resetSectionToShared = useCallback(async (groupId, sectionId) => {
+    if (!activeCountry) return
+    const prev = overrides
+    const next = clearSectionOverride(overrides[activeCountry] || {}, groupId, sectionId)
+
+    const all = { ...prev }
+    if (Object.keys(next).length) all[activeCountry] = next
+    else delete all[activeCountry]
+
+    setOverrides(all)
+    setSaving(true)
+    try {
+      await persistOverrideSection(activeCountry, groupId, sectionId, {})
+      setError('')
+    } catch (e) {
+      setOverrides(prev)
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }, [activeCountry, overrides])
+
   // ── Users + roles ─────────────────────────────────────
   const setUserRole = useCallback(async (id, role) => {
     const prev = users
@@ -407,8 +507,15 @@ export function AdminProvider({ children }) {
     reviews, upsertReview, deleteReview,
     vouchers, upsertVoucher, deleteVoucher,
     requests, updateRequest, setRequestStatus, deleteRequest,
-    pages, updatePageSection,
-    site, updateSiteSection,
+    pages: resolvedPages, updatePageSection,
+    site: resolvedSite, updateSiteSection,
+    basePages: pages, baseSite: site,
+    countries: COUNTRY_IDS,
+    activeCountry, setActiveCountry,
+    overrides: countryOverrides,
+    // The full map, so the switcher can show how much each market differs.
+    allOverrides: overrides,
+    saveSection, resetSectionToShared,
     locations, upsertLocation, deleteLocation,
     users, setUserRole,
     moveUp, moveDown,

@@ -2,11 +2,12 @@
 import { useMemo, useState } from 'react'
 import { useAdmin } from './AdminContext'
 import ContentEditor from './ContentEditor'
+import CountryNotice from './CountryNotice'
 import { PAGES, seedPages } from '@/lib/admin/content'
 import { siteUrl } from '@/lib/site'
 
 export default function PagesView() {
-  const { pages, updatePageSection, allowed } = useAdmin()
+  const { pages, saveSection, allowed, activeCountry } = useAdmin()
   const [openId, setOpenId] = useState(null)
 
   // Kept for the per-section "Revert" action, which restores the original copy.
@@ -28,12 +29,15 @@ export default function PagesView() {
           </a>
         </div>
 
+        <CountryNotice />
+
         <ContentEditor
+          scopeKey={activeCountry}
           group={page}
           values={pages[page.id]}
           seed={seeded[page.id]}
           canEdit={allowed('edit')}
-          onSave={(sectionId, sectionValues) => updatePageSection(page.id, sectionId, sectionValues)}
+          onSave={(sectionId, sectionValues) => saveSection('page', page.id, sectionId, sectionValues)}
         >
           <span className="ad-cf-path">{page.path}</span>
           <span className="ad-cf-count">
