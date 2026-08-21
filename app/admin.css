@@ -971,3 +971,18 @@
   .ad-country-select { max-width: 88px; }
   .ad-logout { padding: 5px 8px !important; }
 }
+
+/* ── Custom date range ──────────────────────────────────── */
+.ad-daterange { display: inline-flex; align-items: center; gap: 8px; }
+.ad-daterange-part { display: inline-flex; align-items: center; gap: 6px; }
+.ad-daterange-part > span {
+  font-size: 10px; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--slate);
+}
+.ad-date-input { font-variant-numeric: tabular-nums; min-width: 132px; }
+
+@media (max-width: 620px) {
+  .ad-daterange { flex-direction: column; align-items: stretch; gap: 6px; width: 100%; }
+  .ad-daterange-part { justify-content: space-between; }
+  .ad-date-input { flex: 1; }
+}

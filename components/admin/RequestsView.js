@@ -19,7 +19,29 @@ const DATE_RANGES = [
   { id: '7', label: 'Last 7 days', days: 7 },
   { id: '30', label: 'Last 30 days', days: 30 },
   { id: '90', label: 'Last 90 days', days: 90 },
+  { id: 'custom', label: 'Between two dates…', days: null },
 ]
+
+/**
+ * Start of the given day, local time. Comparing raw date strings would filter
+ * by UTC and drop a morning enquiry for anyone east of Greenwich.
+ */
+function dayStart(value) {
+  if (!value) return null
+  const d = new Date(`${value}T00:00:00`)
+  return Number.isNaN(d.getTime()) ? null : d.getTime()
+}
+
+/**
+ * End of the given day — 23:59:59.999 local.
+ *
+ * The "to" date has to be inclusive: choosing 21 August and losing everything
+ * that arrived that day is the off-by-one every date filter gets wrong.
+ */
+function dayEnd(value) {
+  const start = dayStart(value)
+  return start === null ? null : start + 86400_000 - 1
+}
 
 function StatusPill({ status }) {
   return (
@@ -63,6 +85,8 @@ export default function RequestsView() {
   const [country, setCountry] = useState('')
   const [city, setCity] = useState('')
   const [range, setRange] = useState('')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
   const [openId, setOpenId] = useState(null)
   const [confirm, setConfirm] = useState(null)
 
@@ -91,6 +115,8 @@ export default function RequestsView() {
     const q = query.trim().toLowerCase()
     const days = DATE_RANGES.find(d => d.id === range)?.days
     const cutoff = days ? Date.now() - days * 86400_000 : null
+    const fromAt = range === 'custom' ? dayStart(from) : null
+    const toAt = range === 'custom' ? dayEnd(to) : null
 
     return requests
       .filter(r => {
@@ -98,11 +124,15 @@ export default function RequestsView() {
         if (source && r.source !== source) return false
         if (country && r.country !== country) return false
         if (city && r.city !== city) return false
-        if (cutoff) {
+        if (cutoff || fromAt !== null || toAt !== null) {
           const at = new Date(r.createdAt).getTime()
           // An unparseable date is kept rather than silently dropped — losing
           // an enquiry from a filter is worse than showing an extra row.
-          if (Number.isFinite(at) && at < cutoff) return false
+          if (Number.isFinite(at)) {
+            if (cutoff && at < cutoff) return false
+            if (fromAt !== null && at < fromAt) return false
+            if (toAt !== null && at > toAt) return false
+          }
         }
         if (q) {
           const hay = `${r.name} ${r.mobile} ${r.email} ${r.city} ${r.treatmentArea} ${r.treatment} ${r.doctor} ${(r.concerns || []).join(' ')}`.toLowerCase()
@@ -113,11 +143,11 @@ export default function RequestsView() {
       // Newest first.
       .slice()
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-  }, [requests, query, status, source, country, city, range])
+  }, [requests, query, status, source, country, city, range, from, to])
 
   const open = openId ? requests.find(r => r.id === openId) : null
 
-  const isFiltered = Boolean(query.trim() || status || source || country || city || range)
+  const isFiltered = Boolean(query.trim() || status || source || country || city || range || from || to)
 
   /**
    * Export what is on screen, not the whole table — the filters are how you
@@ -216,13 +246,49 @@ export default function RequestsView() {
           <option value="">All cities</option>
           {cities.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <select className="ad-input ad-filter" value={range} onChange={e => setRange(e.target.value)}>
+        <select
+          className="ad-input ad-filter"
+          value={range}
+          // Leaving the custom range clears its dates, so they can't keep
+          // filtering invisibly from behind a preset.
+          onChange={e => {
+            setRange(e.target.value)
+            if (e.target.value !== 'custom') { setFrom(''); setTo('') }
+          }}
+        >
           {DATE_RANGES.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
         </select>
+        {range === 'custom' && (
+          <span className="ad-daterange">
+            <label className="ad-daterange-part">
+              <span>From</span>
+              <input
+                type="date"
+                className="ad-input ad-date-input"
+                value={from}
+                max={to || undefined}
+                onChange={e => setFrom(e.target.value)}
+              />
+            </label>
+            <label className="ad-daterange-part">
+              <span>To</span>
+              <input
+                type="date"
+                className="ad-input ad-date-input"
+                value={to}
+                min={from || undefined}
+                onChange={e => setTo(e.target.value)}
+              />
+            </label>
+          </span>
+        )}
         {isFiltered && (
           <button
             className="ad-btn ad-btn--ghost ad-btn--sm"
-            onClick={() => { setQuery(''); setStatus(''); setSource(''); setCountry(''); setCity(''); setRange('') }}
+            onClick={() => {
+              setQuery(''); setStatus(''); setSource('')
+              setCountry(''); setCity(''); setRange(''); setFrom(''); setTo('')
+            }}
           >
             Clear filters
           </button>
