@@ -198,6 +198,10 @@ create table if not exists public.locations (
   tel        text not null default '',
   hours      text not null default '',
   map_q      text not null default '',
+  -- Opening date as text (yyyy-mm-dd) rather than a date column: it is often
+  -- unknown, and an empty string is easier to carry through the form than a
+  -- null date the inputs would have to special-case.
+  opened     text not null default '',
   sort       integer not null default 0,
   updated_at timestamptz not null default now()
 );
@@ -417,3 +421,5 @@ begin
   alter table public.content add constraint content_scope_check
     check (scope in ('page', 'site') or scope ~ '^country:[A-Za-z]+$');
 end $$;
+
+alter table public.locations add column if not exists opened text not null default '';

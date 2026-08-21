@@ -98,7 +98,7 @@ npm run seed
 ```
 
 This reads the original hardcoded content from `lib/seed-data/` and writes it
-into the database: 24 services, 7 doctors, 12 reviews, 4 vouchers, 16 clinic
+into the database: 24 services, 7 doctors, 12 reviews, 4 vouchers, 15 clinic
 locations, and all the page copy.
 
 Re-running is safe — rows that already exist are left alone, so it can never

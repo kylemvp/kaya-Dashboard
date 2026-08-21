@@ -7,12 +7,31 @@ function slugify(str) {
   return String(str).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
 }
 
+/**
+ * Start of a day, local time. Comparing the raw yyyy-mm-dd strings would work
+ * only while every value is that exact format; going through Date keeps it
+ * correct if a value ever arrives with a time attached.
+ */
+function dayStart(value) {
+  if (!value) return null
+  const d = new Date(`${String(value).slice(0, 10)}T00:00:00`)
+  return Number.isNaN(d.getTime()) ? null : d.getTime()
+}
+
+/** End of a day — the To date has to include the day itself. */
+function dayEnd(value) {
+  const start = dayStart(value)
+  return start === null ? null : start + 86400_000 - 1
+}
+
 export default function LocationsView() {
   const { locations, upsertLocation, deleteLocation, allowed } = useAdmin()
   const [editing, setEditing] = useState(null) // { initial, isNew }
   const [confirm, setConfirm] = useState(null)
   const [country, setCountry] = useState('all')
   const [query, setQuery] = useState('')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
 
   const canCreate = allowed('create')
   const canDelete = allowed('delete')
@@ -30,11 +49,28 @@ export default function LocationsView() {
   }
 
   const q = query.trim().toLowerCase()
+  const fromAt = dayStart(from)
+  const toAt = dayEnd(to)
+
   const filtered = locations.filter(l => {
     if (country !== 'all' && l.country !== country) return false
+
+    if (fromAt !== null || toAt !== null) {
+      const at = dayStart(l.opened)
+      // A clinic with no opening date recorded is excluded once you filter by
+      // date — it cannot be shown to satisfy a range it has no value for, and
+      // the count below says how many are being left out.
+      if (at === null) return false
+      if (fromAt !== null && at < fromAt) return false
+      if (toAt !== null && at > toAt) return false
+    }
+
     if (!q) return true
     return `${l.name} ${l.city} ${l.addr}`.toLowerCase().includes(q)
   })
+
+  const dateFiltering = fromAt !== null || toAt !== null
+  const undated = locations.filter(l => !dayStart(l.opened)).length
 
   const target = confirm ? locations.find(l => l.id === confirm) : null
 
@@ -45,6 +81,9 @@ export default function LocationsView() {
           <h1 className="ad-view-title">Locations</h1>
           <p className="ad-view-sub">
             Clinic records behind the Find a Clinic page — addresses, phone numbers, and opening hours.
+            {dateFiltering && undated > 0 && (
+              <> · <strong>{undated}</strong> without an opening date {undated === 1 ? 'is' : 'are'} hidden.</>
+            )}
           </p>
         </div>
         {canCreate && (
@@ -62,6 +101,34 @@ export default function LocationsView() {
           value={query}
           onChange={e => setQuery(e.target.value)}
         />
+        <label className="ad-daterange-part">
+          <span>Opened from</span>
+          <input
+            type="date"
+            className="ad-input ad-date-input"
+            value={from}
+            max={to || undefined}
+            onChange={e => setFrom(e.target.value)}
+          />
+        </label>
+        <label className="ad-daterange-part">
+          <span>To</span>
+          <input
+            type="date"
+            className="ad-input ad-date-input"
+            value={to}
+            min={from || undefined}
+            onChange={e => setTo(e.target.value)}
+          />
+        </label>
+        {(from || to) && (
+          <button
+            className="ad-btn ad-btn--ghost ad-btn--sm"
+            onClick={() => { setFrom(''); setTo('') }}
+          >
+            Clear dates
+          </button>
+        )}
         <select className="ad-input ad-filter" value={country} onChange={e => setCountry(e.target.value)}>
           <option value="all">All countries ({locations.length})</option>
           {CLINIC_COUNTRIES.map(c => (
@@ -79,6 +146,7 @@ export default function LocationsView() {
               <th>Clinic</th>
               <th>Country</th>
               <th>City</th>
+              <th>Opened</th>
               <th>Telephone</th>
               <th>Timings</th>
               <th className="ad-th-actions">Actions</th>
@@ -93,6 +161,12 @@ export default function LocationsView() {
                 </td>
                 <td><span className="ad-badge">{l.country}</span></td>
                 <td>{l.city}</td>
+                <td className="ad-loc-opened">
+                  {l.opened
+                    ? new Date(`${l.opened}T00:00:00`).toLocaleDateString('en-GB',
+                        { day: 'numeric', month: 'short', year: 'numeric' })
+                    : <span className="ad-muted">not recorded</span>}
+                </td>
                 <td>{l.tel || '—'}</td>
                 <td className="ad-loc-hours">{l.hours || '—'}</td>
                 <td className="ad-td-actions">
@@ -106,7 +180,11 @@ export default function LocationsView() {
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={6} className="ad-empty">No clinics match this filter.</td></tr>
+              <tr><td colSpan={7} className="ad-empty">
+                {dateFiltering && undated
+                  ? `No clinics match. ${undated} ${undated === 1 ? 'clinic has' : 'clinics have'} no opening date recorded, so they are excluded while filtering by date.`
+                  : 'No clinics match this filter.'}
+              </td></tr>
             )}
           </tbody>
         </table>
@@ -209,6 +287,15 @@ function LocationForm({ initial, isNew, existing, onSave, onClose }) {
         <fieldset className="ad-fieldset">
           <legend>Contact &amp; hours</legend>
           <div className="ad-grid2">
+            <label className="ad-field">
+              <span className="ad-field-label">Opened</span>
+              <input className="ad-input" type="date" value={form.opened || ''}
+                onChange={e => set('opened', e.target.value)} />
+              <span className="ad-field-hint">
+                Leave blank if unknown. Clinics without a date are hidden when
+                the list is filtered by opening date.
+              </span>
+            </label>
             <label className="ad-field">
               <span className="ad-field-label">Telephone</span>
               <input className="ad-input" value={form.tel} onChange={e => set('tel', e.target.value)}
