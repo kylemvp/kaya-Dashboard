@@ -46,6 +46,19 @@ const DIAGNOSTIC = `
     });
   }
 
+  // ?reset=1 wipes this browser's saved dashboard data and reloads clean.
+  // A one-click recovery matters because the state that needs clearing is the
+  // same state that can stop the page rendering the button to clear it.
+  if (location.search.indexOf('reset=1') !== -1) {
+    try {
+      Object.keys(localStorage)
+        .filter(function (k) { return k.indexOf('kaya_') === 0; })
+        .forEach(function (k) { localStorage.removeItem(k); });
+    } catch (e) { /* storage blocked — reloading is still worth a try */ }
+    location.replace(location.origin + location.pathname);
+    return;
+  }
+
   // ?diag=1 reports immediately and unconditionally. Waiting 12 seconds and
   // guessing whether the app mounted is the wrong tool when someone is trying
   // to send you what their browser is doing.
@@ -74,8 +87,31 @@ const DIAGNOSTIC = `
     var sheets = 0;
     try { sheets = document.styleSheets.length; } catch (e) { /* ignore */ }
 
+    // The app can mount and still show nothing if layout collapses it, so
+    // report the geometry too — "mounted but invisible" and "never mounted"
+    // have completely different causes.
+    var shell = document.querySelector('.ad-shell, .ad-login, .ad-crash, .ad-boot');
+    var geo = 'no element';
+    if (shell) {
+      var r = shell.getBoundingClientRect();
+      var cs = getComputedStyle(shell);
+      geo = shell.className + '  ' + Math.round(r.width) + 'x' + Math.round(r.height) +
+        '  display=' + cs.display + ' visibility=' + cs.visibility +
+        ' opacity=' + cs.opacity + ' children=' + shell.children.length;
+    }
+
+    var kids = [];
+    for (var j = 0; j < document.body.children.length && j < 6; j++) {
+      var c = document.body.children[j];
+      var cr = c.getBoundingClientRect();
+      kids.push(c.tagName + '.' + (c.className || '—').toString().slice(0, 28) +
+        ' ' + Math.round(cr.width) + 'x' + Math.round(cr.height));
+    }
+
     var rows = [
       ['App mounted', mounted ? 'yes' : 'NO'],
+      ['Root element', geo],
+      ['Body children', kids.join('\\n') || '(none)'],
       ['Browser', navigator.userAgent],
       ['Page', location.href],
       ['Stylesheets loaded', String(sheets)],
