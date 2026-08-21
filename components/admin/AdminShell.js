@@ -72,7 +72,7 @@ export default function AdminShell() {
       {/* Sidebar */}
       <aside className="ad-sidebar">
         <div className="ad-sidebar-brand">
-          <img src="/Assets/kaya-logo.svg" alt="Kaya" className="ad-sidebar-logo" />
+          <img src="/Assets/kaya-logo-vector.svg" alt="Kaya" className="ad-sidebar-logo" />
           <span className="ad-sidebar-badge">CMS</span>
         </div>
 

@@ -69,15 +69,33 @@ export function AdminProvider({ children }) {
     setSite(data.site)
   }
 
-  /** Pull everything from Supabase. Safe to call repeatedly. */
+  /**
+   * Pull everything. Safe to call repeatedly.
+   *
+   * Content and country overrides load INDEPENDENTLY. They were briefly loaded
+   * together with Promise.all, which meant a failure fetching overrides —
+   * secondary data most installations don't even have — rejected the whole
+   * thing, applyAll never ran, and every list rendered empty. Optional data
+   * must not be able to take the catalogue down with it.
+   */
   const refresh = useCallback(async () => {
     const token = ++loadToken.current
     setLoading(true)
+
+    // Overrides first and on their own terms: failing here is survivable, so
+    // it must not reach the catch below.
     try {
-      const [data, ov] = await Promise.all([fetchAll(), fetchOverrides()])
+      const ov = await fetchOverrides()
+      if (token === loadToken.current) setOverrides(ov || {})
+    } catch (e) {
+      if (token === loadToken.current) setOverrides({})
+      console.error('Country overrides could not be loaded; using shared copy.', e)
+    }
+
+    try {
+      const data = await fetchAll()
       if (token !== loadToken.current) return
       applyAll(data)
-      setOverrides(ov || {})
       setError('')
     } catch (e) {
       if (token !== loadToken.current) return

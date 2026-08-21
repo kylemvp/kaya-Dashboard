@@ -30,7 +30,7 @@ export default function LoginScreen() {
     <div className="ad-login">
       <div className="ad-login-card">
         <div className="ad-login-brand">
-          <img src="/Assets/kaya-logo.svg" alt="Kaya" className="ad-login-logo" />
+          <img src="/Assets/kaya-logo-vector.svg" alt="Kaya" className="ad-login-logo" />
           <span className="ad-login-badge">CMS</span>
         </div>
         <h1 className="ad-login-title">Content Dashboard</h1>

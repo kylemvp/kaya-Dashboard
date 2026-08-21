@@ -22,10 +22,11 @@
   box-shadow: 0 30px 70px rgba(90,70,140,.16);
 }
 .ad-login-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
-.ad-login-logo {
-  height: 30px; width: auto;
-  filter: brightness(0) saturate(100%) invert(18%) sepia(60%) saturate(800%) hue-rotate(238deg) brightness(85%) contrast(110%);
-}
+/* No filter: the vector logo is already Kaya purple. The previous asset was a
+   PNG wrapped in an SVG, recoloured by a seven-stage filter starting with
+   brightness(0) — which blackens every opaque pixel, so any frame where the
+   embedded bitmap had not decoded rendered as a solid purple block. */
+.ad-login-logo { height: 30px; width: auto; }
 .ad-login-badge, .ad-sidebar-badge {
   font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
   color: var(--primary); background: var(--lilac-lt);
@@ -94,10 +95,7 @@
   padding: 22px 16px; position: sticky; top: 0; height: 100vh;
 }
 .ad-sidebar-brand { display: flex; align-items: center; gap: 9px; padding: 0 8px 22px; }
-.ad-sidebar-logo {
-  height: 26px; width: auto;
-  filter: brightness(0) saturate(100%) invert(18%) sepia(60%) saturate(800%) hue-rotate(238deg) brightness(85%) contrast(110%);
-}
+.ad-sidebar-logo { height: 26px; width: auto; }
 .ad-sidebar-badge { background: var(--lilac-lt); color: var(--primary); }
 .ad-nav { display: flex; flex-direction: column; gap: 3px; flex: 1; }
 .ad-nav-item {
