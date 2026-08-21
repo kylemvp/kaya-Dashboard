@@ -46,19 +46,43 @@ const DIAGNOSTIC = `
     });
   }
 
-  setTimeout(function () {
-    // The app mounted — nothing to report.
-    if (document.querySelector('.ad-login, .ad-shell, .ad-crash')) return;
+  // ?diag=1 reports immediately and unconditionally. Waiting 12 seconds and
+  // guessing whether the app mounted is the wrong tool when someone is trying
+  // to send you what their browser is doing.
+  var forced = location.search.indexOf('diag=1') !== -1;
 
-    // The panel is APPENDED, never swapped in for the page. An earlier version
-    // replaced document.body, which meant a merely slow start was destroyed
-    // by the very thing meant to diagnose it. Adding cannot break anything.
+  function report() {
+    if (!forced && document.querySelector('.ad-login, .ad-shell, .ad-crash')) return;
+
+    // The panel is APPENDED, never swapped in for the page: an earlier version
+    // replaced document.body, so a merely slow start was destroyed by the very
+    // thing meant to diagnose it.
+    //
+    // Every row below answers a question that would otherwise need asking.
+    var mounted = !!document.querySelector('.ad-login, .ad-shell, .ad-crash');
+    var stored = [];
+    var storageErr = '';
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf('kaya_') === 0) {
+          stored.push(k + ' = ' + String(localStorage.getItem(k)).length + ' chars');
+        }
+      }
+    } catch (e) { storageErr = String(e && e.message || e); }
+
+    var sheets = 0;
+    try { sheets = document.styleSheets.length; } catch (e) { /* ignore */ }
+
     var rows = [
+      ['App mounted', mounted ? 'yes' : 'NO'],
       ['Browser', navigator.userAgent],
       ['Page', location.href],
+      ['Stylesheets loaded', String(sheets)],
       ['Scripts that failed', failed.length ? failed.join('\\n') : 'none'],
       ['Errors', errors.length ? errors.join('\\n') : 'none recorded'],
-      ['Body content', document.body.innerText.trim().slice(0, 120) || '(empty)'],
+      ['Saved data', storageErr ? 'BLOCKED: ' + storageErr : (stored.length ? stored.join('\\n') : 'none')],
+      ['Body text', document.body.innerText.trim().slice(0, 140) || '(empty)'],
     ];
 
     var box = document.createElement('div');
@@ -70,7 +94,7 @@ const DIAGNOSTIC = `
     box.innerHTML =
       '<div style="font-size:15px;font-weight:700;margin-bottom:4px">The dashboard has not started</div>' +
       '<div style="font-size:12.5px;line-height:1.55;color:#665F7A;margin-bottom:16px">' +
-      'Still loading after 12 seconds. Please send a screenshot of this panel.</div>' +
+      'Please send a screenshot of this panel — it says what this browser is doing.</div>' +
       rows.map(function (r) {
         return '<div style="margin-bottom:11px">' +
           '<div style="font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;' +
@@ -93,7 +117,15 @@ const DIAGNOSTIC = `
       } catch (e) { /* storage unavailable — reloading is still worth a try */ }
       location.reload();
     });
-  }, 12000);
+  }
+
+  if (forced) {
+    // Wait for the app to have had a fair chance, then report regardless.
+    if (document.readyState === 'complete') setTimeout(report, 2500);
+    else window.addEventListener('load', function () { setTimeout(report, 2500); });
+  } else {
+    setTimeout(report, 12000);
+  }
 })();
 `
 
