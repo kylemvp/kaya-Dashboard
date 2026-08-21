@@ -951,3 +951,25 @@
 .ad-note--country strong { color: #7A5A14; }
 .ad-note--country .ad-btn { flex-shrink: 0; }
 @media (max-width: 560px) { .ad-note--country { flex-direction: column; } }
+
+/* The country switcher pushed the topbar past a phone's width. "View site"
+   is the one item there that is purely a convenience — the switcher tells you
+   which market you're editing and Sign out has to stay reachable — so it is
+   what gives way. */
+@media (max-width: 620px) {
+  .ad-topbar { padding: 0 12px; gap: 8px; }
+  .ad-topbar-right { gap: 8px; min-width: 0; }
+  .ad-topbar-right > a.ad-btn--ghost { display: none; }
+  .ad-country { padding: 4px 8px; gap: 5px; }
+  .ad-country-select { font-size: 12px; max-width: 104px; }
+}
+
+/* Narrow phones (iPhone SE and similar). The preview badge is the last thing
+   that can go: it matters, but "Preview mode" is also stated inside the page,
+   whereas the switcher and Sign out exist nowhere else. */
+@media (max-width: 400px) {
+  .ad-demo-tag { display: none; }
+  .ad-topbar { padding: 0 10px; gap: 6px; }
+  .ad-country-select { max-width: 88px; }
+  .ad-logout { padding: 5px 8px !important; }
+}
